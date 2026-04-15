@@ -162,7 +162,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('paypal_id')
           .setLabel('ID du salon PayPal')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('1493994524911865908')
+          .setPlaceholder('1493993104385249372')
           .setRequired(true);
 
         const row = new ActionRowBuilder().addComponents(idInput);
