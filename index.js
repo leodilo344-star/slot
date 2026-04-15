@@ -42,7 +42,7 @@ client.on('messageCreate', async (message) => {
         { name: '!time', value: 'Voir ton temps restant' },
         { name: '!slots', value: 'Voir les slots disponibles' }
       );
-    return message.reply({ embeds: [embed] });
+    return message.reply({ embeds: [embed], ephemeral: true });
   }
 
   // !panel
@@ -61,24 +61,24 @@ client.on('messageCreate', async (message) => {
       .setDescription('Clique sur le bouton pour créer un ticket\n\n**Tarifs:**\n💳 PayPal: 2€/h\n🧠 Brainrot: 1 Garama/h')
       .setFooter({ text: 'PayPal ou Brainrot' });
 
-    await message.channel.send({ embeds: [embed], components: [panelButton] });
+    await message.reply({ embeds: [embed], components: [panelButton], ephemeral: true });
   }
 
   // !confirm
   if (message.content.startsWith('!confirm')) {
     if (!message.member.permissions.has('Administrator')) {
-      return message.reply('❌ Tu n\'as pas les permissions !');
+      return message.reply({ content: '❌ Tu n\'as pas les permissions !', ephemeral: true });
     }
 
     const user = message.mentions.members.first();
     const hours = parseInt(message.content.split(' ')[2]);
 
     if (!user || !hours) {
-      return message.reply('Usage: !confirm @user <heures>');
+      return message.reply({ content: 'Usage: !confirm @user <heures>', ephemeral: true });
     }
 
     if (currentSlots >= MAX_SLOTS) {
-      return message.reply(`❌ Tous les slots sont utilisés ! (${currentSlots}/${MAX_SLOTS})`);
+      return message.reply({ content: `❌ Tous les slots sont utilisés ! (${currentSlots}/${MAX_SLOTS})`, ephemeral: true });
     }
 
     currentSlots++;
@@ -107,7 +107,7 @@ client.on('messageCreate', async (message) => {
       displayTimer(ticketChannel, user, hours);
     }
 
-    message.reply(`✅ Accès activé pour ${user} pendant ${hours}h\n📊 Slots: ${currentSlots}/${MAX_SLOTS}`);
+    message.reply({ content: `✅ Accès activé pour ${user} pendant ${hours}h\n📊 Slots: ${currentSlots}/${MAX_SLOTS}`, ephemeral: true });
 
     const duration = hours * 60 * 60 * 1000;
     const endTime = Date.now() + duration;
@@ -140,19 +140,19 @@ client.on('messageCreate', async (message) => {
   // !time
   if (message.content === '!time') {
     const data = activeUsers.get(message.author.id);
-    if (!data) return message.reply('❌ Tu n\'as pas d\'accès actif');
+    if (!data) return message.reply({ content: '❌ Tu n\'as pas d\'accès actif', ephemeral: true });
     const remaining = data.endTime - Date.now();
     const minutes = Math.floor(remaining / 60000);
-    message.reply(`⏱️ Temps restant: ${minutes} minutes`);
+    message.reply({ content: `⏱️ Temps restant: ${minutes} minutes`, ephemeral: true });
   }
 
   // !slots
   if (message.content === '!slots') {
     const available = MAX_SLOTS - currentSlots;
     if (currentSlots >= MAX_SLOTS) {
-      message.reply(`❌ Tous les slots sont utilisés ! (${currentSlots}/${MAX_SLOTS})`);
+      message.reply({ content: `❌ Tous les slots sont utilisés ! (${currentSlots}/${MAX_SLOTS})`, ephemeral: true });
     } else {
-      message.reply(`📊 Slots: ${currentSlots}/${MAX_SLOTS} (${available} disponible${available > 1 ? 's' : ''})`);
+      message.reply({ content: `📊 Slots: ${currentSlots}/${MAX_SLOTS} (${available} disponible${available > 1 ? 's' : ''})`, ephemeral: true });
     }
   }
 });
@@ -252,7 +252,7 @@ client.on('interactionCreate', async (interaction) => {
     // Bouton fermer ticket
     if (interaction.isButton() && interaction.customId === 'close_ticket') {
       if (interaction.channel.name.startsWith('ticket-')) {
-        await interaction.reply('⏳ Fermeture du ticket...');
+        await interaction.reply({ content: '⏳ Fermeture du ticket...', ephemeral: true });
         setTimeout(() => {
           interaction.channel.delete().catch(() => {});
         }, 2000);
