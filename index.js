@@ -13,7 +13,7 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 const BUYER_ROLE_ID = process.env.BUYER_ROLE_ID;
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const PAYPAL_EMAIL = process.env.PAYPAL_EMAIL;
+const PAYPAL_EMAIL = 'zxnllegoatap@outlook.com';
 const ROBLOX_USERNAME = process.env.ROBLOX_USERNAME;
 const MAX_SLOTS = 5;
 
@@ -58,7 +58,7 @@ client.on('messageCreate', async (message) => {
     const embed = new EmbedBuilder()
       .setColor('#FF6B6B')
       .setTitle('💳 Système de Paiement')
-      .setDescription('Clique sur le bouton pour créer un ticket\n\n**Tarifs:**\n💳 PayPal: 2€/h\n🧠 Brainrot: 1 Garama/h')
+      .setDescription('Clique sur le bouton pour créer un ticket\n\n**Tarifs:**\n💳 PayPal: 2€/h\n🧠 Brainrot: 1 TIC/h')
       .setFooter({ text: 'PayPal ou Brainrot' });
 
     await message.reply({ embeds: [embed], components: [panelButton], ephemeral: true });
@@ -198,10 +198,10 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const priceEuro = hours * 2;
-      const priceGarama = hours * 1;
+      const priceTic = hours * 1;
 
       // Créer le ticket
-      await createTicket(interaction.user, interaction.guild, hours, priceEuro, priceGarama);
+      await createTicket(interaction.user, interaction.guild, hours, priceEuro, priceTic);
 
       await interaction.reply({
         content: `✅ Ticket créé ! Regarde le ticket privé.`,
@@ -221,7 +221,7 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      const { hours, priceEuro, priceGarama, ticketChannel } = ticketData;
+      const { hours, priceEuro, priceTic, ticketChannel } = ticketData;
 
       if (method === 'paypal') {
         const paypalLink = `https://paypal.me/zxnllegoatap/${priceEuro}`;
@@ -235,7 +235,7 @@ client.on('interactionCreate', async (interaction) => {
         const embed = new EmbedBuilder()
           .setColor('#FF6B6B')
           .setTitle('🧠 Paiement Brainrot')
-          .setDescription(`Voici mon Pseudo Roblox: **${ROBLOX_USERNAME}**\n\nVous devez payer **${priceGarama} Garama** (${hours}h × 1 Garama/h)`);
+          .setDescription(`Voici mon Pseudo Roblox: **${ROBLOX_USERNAME}**\n\nVous devez payer **${priceTic} TIC** (${hours}h × 1 TIC/h)`);
 
         await ticketChannel.send({ embeds: [embed] });
       }
@@ -273,7 +273,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-async function createTicket(user, guild, hours, priceEuro, priceGarama) {
+async function createTicket(user, guild, hours, priceEuro, priceTic) {
   ticketCounter++;
   const ticketName = `ticket-${ticketCounter}`;
 
@@ -312,7 +312,7 @@ async function createTicket(user, guild, hours, priceEuro, priceGarama) {
               emoji: '💳'
             },
             {
-              label: `Brainrot - ${priceGarama} Garama`,
+              label: `Brainrot - ${priceTic} TIC`,
               value: 'brainrot',
               emoji: '🧠'
             }
@@ -336,7 +336,7 @@ async function createTicket(user, guild, hours, priceEuro, priceGarama) {
     await ticket.send({ embeds: [embed], components: [paymentMenu, closeButton] });
 
     // Stocker les données du ticket
-    userTicketData.set(user.id, { hours, priceEuro, priceGarama, ticketChannel: ticket });
+    userTicketData.set(user.id, { hours, priceEuro, priceTic, ticketChannel: ticket });
   } catch (error) {
     console.error(error);
   }
