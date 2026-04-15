@@ -13,13 +13,14 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 const BUYER_ROLE_ID = process.env.BUYER_ROLE_ID;
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const PAYMENT_CHANNEL_ID = process.env.PAYMENT_CHANNEL_ID;
+const PAYPAL_EMAIL = process.env.PAYPAL_EMAIL;
 const MAX_SLOTS = parseInt(process.env.MAX_SLOTS) || 5;
+const PRICE_PER_HOUR = 2;
 
 let currentSlots = 0;
 let activeUsers = new Map();
 let ticketCounter = 0;
-let userPaymentMethod = new Map();
+let userPaymentData = new Map();
 
 client.on('ready', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
@@ -56,7 +57,7 @@ client.on('messageCreate', async (message) => {
     const embed = new EmbedBuilder()
       .setColor('#FF6B6B')
       .setTitle('💳 Système de Paiement')
-      .setDescription('Clique sur le bouton pour créer un ticket et choisir ton moyen de paiement')
+      .setDescription('Clique sur le bouton pour créer un ticket et choisir ton moyen de paiement\n\n**Tarif:** 2€ par heure')
       .setFooter({ text: 'PayPal ou Brainrot' });
 
     await message.channel.send({ embeds: [embed], components: [panelButton] });
@@ -121,6 +122,37 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // Bouton créer ticket
     if (interaction.isButton() && interaction.customId === 'create_ticket_panel') {
+      const modal = new ModalBuilder()
+        .setCustomId('hours_modal')
+        .setTitle('Combien d\'heures ?');
+
+      const hoursInput = new TextInputBuilder()
+        .setCustomId('hours_input')
+        .setLabel('Nombre d\'heures (2€/h)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Ex: 1, 2, 5...')
+        .setRequired(true);
+
+      const row = new ActionRowBuilder().addComponents(hoursInput);
+      modal.addComponents(row);
+
+      await interaction.showModal(modal);
+    }
+
+    // Modal heures
+    if (interaction.isModalSubmit() && interaction.customId === 'hours_modal') {
+      const hours = parseInt(interaction.fields.getTextInputValue('hours_input'));
+
+      if (isNaN(hours) || hours <= 0) {
+        return await interaction.reply({
+          content: '❌ Rentre un nombre valide !',
+          ephemeral: true
+        });
+      }
+
+      const totalPrice = hours * PRICE_PER_HOUR;
+      userPaymentData.set(interaction.user.id, { hours, totalPrice });
+
       const paymentMenu = new ActionRowBuilder()
         .addComponents(
           new StringSelectMenuBuilder()
@@ -128,12 +160,12 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisir un moyen de paiement')
             .addOptions(
               {
-                label: 'PayPal',
+                label: `PayPal - ${totalPrice}€`,
                 value: 'paypal',
                 emoji: '💳'
               },
               {
-                label: 'Brainrot',
+                label: `Brainrot - ${totalPrice}€`,
                 value: 'brainrot',
                 emoji: '🧠'
               }
@@ -141,7 +173,7 @@ client.on('interactionCreate', async (interaction) => {
         );
 
       await interaction.reply({
-        content: '💰 Choisir ton moyen de paiement :',
+        content: `💰 **${hours}h = ${totalPrice}€**\n\nChoisir ton moyen de paiement :`,
         components: [paymentMenu],
         ephemeral: true
       });
@@ -150,30 +182,30 @@ client.on('interactionCreate', async (interaction) => {
     // Menu de sélection du moyen de paiement
     if (interaction.isStringSelectMenu() && interaction.customId === 'payment_method') {
       const method = interaction.values[0];
-      userPaymentMethod.set(interaction.user.id, method);
+      const paymentData = userPaymentData.get(interaction.user.id);
 
       if (method === 'paypal') {
-        // Modal pour PayPal
+        // Modal pour email PayPal
         const modal = new ModalBuilder()
           .setCustomId('paypal_modal')
           .setTitle('Informations PayPal');
 
-        const idInput = new TextInputBuilder()
-          .setCustomId('paypal_id')
-          .setLabel('ID du salon PayPal')
+        const emailInput = new TextInputBuilder()
+          .setCustomId('paypal_email')
+          .setLabel('Email PayPal')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('1493993104385249372')
+          .setPlaceholder('exemple@gmail.com')
           .setRequired(true);
 
-        const row = new ActionRowBuilder().addComponents(idInput);
+        const row = new ActionRowBuilder().addComponents(emailInput);
         modal.addComponents(row);
 
         await interaction.showModal(modal);
       } else if (method === 'brainrot') {
         // Créer le ticket directement pour Brainrot
-        await createTicket(interaction.user, interaction.guild, 'brainrot');
+        await createTicket(interaction.user, interaction.guild, 'brainrot', paymentData.hours, paymentData.totalPrice);
         await interaction.reply({
-          content: '✅ Ticket créé ! Brainrot sélectionné.',
+          content: `✅ Ticket créé ! Brainrot sélectionné.\n💰 **Montant:** ${paymentData.totalPrice}€`,
           ephemeral: true
         });
       }
@@ -181,11 +213,12 @@ client.on('interactionCreate', async (interaction) => {
 
     // Modal PayPal
     if (interaction.isModalSubmit() && interaction.customId === 'paypal_modal') {
-      const paypalId = interaction.fields.getTextInputValue('paypal_id');
-      
-      await createTicket(interaction.user, interaction.guild, 'paypal', paypalId);
+      const paypalEmail = interaction.fields.getTextInputValue('paypal_email');
+      const paymentData = userPaymentData.get(interaction.user.id);
+
+      await createTicket(interaction.user, interaction.guild, 'paypal', paymentData.hours, paymentData.totalPrice, paypalEmail);
       await interaction.reply({
-        content: `✅ Ticket créé ! PayPal ID: ${paypalId}`,
+        content: `✅ Ticket créé ! PayPal: ${paypalEmail}\n💰 **Montant:** ${paymentData.totalPrice}€`,
         ephemeral: true
       });
     }
@@ -207,7 +240,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-async function createTicket(user, guild, paymentMethod, paypalId = null) {
+async function createTicket(user, guild, paymentMethod, hours, totalPrice, paypalEmail = null) {
   ticketCounter++;
   const ticketName = `ticket-${ticketCounter}`;
 
@@ -236,9 +269,12 @@ async function createTicket(user, guild, paymentMethod, paypalId = null) {
       );
 
     let description = `Bienvenue ${user}!\n\n`;
+    description += `⏱️ **Durée:** ${hours}h\n`;
+    description += `💰 **Montant:** ${totalPrice}€\n`;
+    
     if (paymentMethod === 'paypal') {
       description += `💳 **Moyen de paiement:** PayPal\n`;
-      description += `📍 **ID du salon:** ${paypalId}\n`;
+      description += `📧 **Email:** ${paypalEmail}\n`;
     } else {
       description += `🧠 **Moyen de paiement:** Brainrot\n`;
     }
