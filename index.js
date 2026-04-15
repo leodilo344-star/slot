@@ -38,7 +38,7 @@ client.on('messageCreate', async (message) => {
       .setTitle('📋 Commandes disponibles')
       .addFields(
         { name: '!panel', value: 'Afficher le panel de paiement' },
-        { name: '!confirm @user <heures>', value: 'Confirmer le paiement et envoyer le script (Admin)' },
+        { name: '!confirm @user 1h', value: 'Confirmer le paiement et envoyer le script (Admin)' },
         { name: '!time', value: 'Voir ton temps restant' },
         { name: '!slots', value: 'Voir les slots disponibles' }
       );
@@ -71,10 +71,17 @@ client.on('messageCreate', async (message) => {
     }
 
     const user = message.mentions.members.first();
-    const hours = parseInt(message.content.split(' ')[2]);
+    const timeStr = message.content.split(' ')[2];
 
-    if (!user || !hours) {
-      return message.reply({ content: 'Usage: !confirm @user <heures>', ephemeral: true });
+    if (!user || !timeStr) {
+      return message.reply({ content: 'Usage: !confirm @user 1h', ephemeral: true });
+    }
+
+    // Parser le format "1h", "2h", etc.
+    const hours = parseInt(timeStr.replace('h', ''));
+
+    if (isNaN(hours) || hours <= 0) {
+      return message.reply({ content: 'Usage: !confirm @user 1h (ex: 2h, 5h)', ephemeral: true });
     }
 
     if (currentSlots >= MAX_SLOTS) {
