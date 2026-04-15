@@ -14,13 +14,15 @@ const TOKEN = process.env.TOKEN;
 const BUYER_ROLE_ID = process.env.BUYER_ROLE_ID;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PAYPAL_EMAIL = process.env.PAYPAL_EMAIL;
+const ROBLOX_USERNAME = process.env.ROBLOX_USERNAME;
 const MAX_SLOTS = parseInt(process.env.MAX_SLOTS) || 5;
 const PRICE_PER_HOUR = 2;
+const GARAMA_PER_HOUR = 1;
 
 let currentSlots = 0;
 let activeUsers = new Map();
 let ticketCounter = 0;
-let userPaymentData = new Map();
+let userTicketData = new Map();
 
 client.on('ready', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
@@ -57,7 +59,7 @@ client.on('messageCreate', async (message) => {
     const embed = new EmbedBuilder()
       .setColor('#FF6B6B')
       .setTitle('💳 Système de Paiement')
-      .setDescription('Clique sur le bouton pour créer un ticket et choisir ton moyen de paiement\n\n**Tarif:** 2€ par heure')
+      .setDescription('Clique sur le bouton pour créer un ticket\n\n**Tarifs:**\n💳 PayPal: 2€/h\n🧠 Brainrot: 1 Garama/h')
       .setFooter({ text: 'PayPal ou Brainrot' });
 
     await message.channel.send({ embeds: [embed], components: [panelButton] });
@@ -128,7 +130,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const hoursInput = new TextInputBuilder()
         .setCustomId('hours_input')
-        .setLabel('Nombre d\'heures (2€/h)')
+        .setLabel('Nombre d\'heures')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Ex: 1, 2, 5...')
         .setRequired(true);
@@ -150,31 +152,14 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      const totalPrice = hours * PRICE_PER_HOUR;
-      userPaymentData.set(interaction.user.id, { hours, totalPrice });
+      const priceEuro = hours * PRICE_PER_HOUR;
+      const priceGarama = hours * GARAMA_PER_HOUR;
 
-      const paymentMenu = new ActionRowBuilder()
-        .addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId('payment_method')
-            .setPlaceholder('Choisir un moyen de paiement')
-            .addOptions(
-              {
-                label: `PayPal - ${totalPrice}€`,
-                value: 'paypal',
-                emoji: '💳'
-              },
-              {
-                label: `Brainrot - ${totalPrice}€`,
-                value: 'brainrot',
-                emoji: '🧠'
-              }
-            )
-        );
+      // Créer le ticket
+      await createTicket(interaction.user, interaction.guild, hours, priceEuro, priceGarama);
 
       await interaction.reply({
-        content: `💰 **${hours}h = ${totalPrice}€**\n\nChoisir ton moyen de paiement :`,
-        components: [paymentMenu],
+        content: `✅ Ticket créé ! Regarde le ticket privé.`,
         ephemeral: true
       });
     }
@@ -182,45 +167,42 @@ client.on('interactionCreate', async (interaction) => {
     // Menu de sélection du moyen de paiement
     if (interaction.isStringSelectMenu() && interaction.customId === 'payment_method') {
       const method = interaction.values[0];
-      const paymentData = userPaymentData.get(interaction.user.id);
+      const ticketData = userTicketData.get(interaction.user.id);
 
-      if (method === 'paypal') {
-        // Modal pour email PayPal
-        const modal = new ModalBuilder()
-          .setCustomId('paypal_modal')
-          .setTitle('Informations PayPal');
-
-        const emailInput = new TextInputBuilder()
-          .setCustomId('paypal_email')
-          .setLabel('Email PayPal')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('exemple@gmail.com')
-          .setRequired(true);
-
-        const row = new ActionRowBuilder().addComponents(emailInput);
-        modal.addComponents(row);
-
-        await interaction.showModal(modal);
-      } else if (method === 'brainrot') {
-        // Créer le ticket directement pour Brainrot
-        await createTicket(interaction.user, interaction.guild, 'brainrot', paymentData.hours, paymentData.totalPrice);
-        await interaction.reply({
-          content: `✅ Ticket créé ! Brainrot sélectionné.\n💰 **Montant:** ${paymentData.totalPrice}€`,
+      if (!ticketData) {
+        return await interaction.reply({
+          content: '❌ Erreur: données du ticket introuvables',
           ephemeral: true
         });
       }
-    }
 
-    // Modal PayPal
-    if (interaction.isModalSubmit() && interaction.customId === 'paypal_modal') {
-      const paypalEmail = interaction.fields.getTextInputValue('paypal_email');
-      const paymentData = userPaymentData.get(interaction.user.id);
+      const { hours, priceEuro, priceGarama, ticketChannel } = ticketData;
 
-      await createTicket(interaction.user, interaction.guild, 'paypal', paymentData.hours, paymentData.totalPrice, paypalEmail);
+      if (method === 'paypal') {
+        const paypalLink = `https://paypal.me/zxnllegoatap/${priceEuro}`;
+        const embed = new EmbedBuilder()
+          .setColor('#003087')
+          .setTitle('💳 Paiement PayPal')
+          .setDescription(`Voici mon PayPal, vous devez payer **${priceEuro}€** (${hours}h × 2€/h)\n\n[Cliquez ici pour payer](${paypalLink})`)
+          .setFooter({ text: 'Merci pour votre achat !' });
+
+        await ticketChannel.send({ embeds: [embed] });
+      } else if (method === 'brainrot') {
+        const embed = new EmbedBuilder()
+          .setColor('#FF6B6B')
+          .setTitle('🧠 Paiement Brainrot')
+          .setDescription(`Voici mon Pseudo Roblox: **${ROBLOX_USERNAME}**\n\nVous devez payer **${priceGarama} Garama** (${hours}h × 1 Garama/h)`)
+          .setFooter({ text: 'Merci pour votre achat !' });
+
+        await ticketChannel.send({ embeds: [embed] });
+      }
+
       await interaction.reply({
-        content: `✅ Ticket créé ! PayPal: ${paypalEmail}\n💰 **Montant:** ${paymentData.totalPrice}€`,
+        content: '✅ Message de paiement envoyé !',
         ephemeral: true
       });
+
+      userTicketData.delete(interaction.user.id);
     }
 
     // Bouton fermer ticket
@@ -240,7 +222,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-async function createTicket(user, guild, paymentMethod, hours, totalPrice, paypalEmail = null) {
+async function createTicket(user, guild, hours, priceEuro, priceGarama) {
   ticketCounter++;
   const ticketName = `ticket-${ticketCounter}`;
 
@@ -260,6 +242,29 @@ async function createTicket(user, guild, paymentMethod, hours, totalPrice, paypa
       ]
     });
 
+    // Ping l'utilisateur
+    await ticket.send(`${user}`);
+
+    // Menu de sélection du moyen de paiement
+    const paymentMenu = new ActionRowBuilder()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('payment_method')
+          .setPlaceholder('Choisir un moyen de paiement')
+          .addOptions(
+            {
+              label: `PayPal - ${priceEuro}€`,
+              value: 'paypal',
+              emoji: '💳'
+            },
+            {
+              label: `Brainrot - ${priceGarama} Garama`,
+              value: 'brainrot',
+              emoji: '🧠'
+            }
+          )
+      );
+
     const closeButton = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
@@ -268,25 +273,16 @@ async function createTicket(user, guild, paymentMethod, hours, totalPrice, paypa
           .setStyle(ButtonStyle.Danger)
       );
 
-    let description = `Bienvenue ${user}!\n\n`;
-    description += `⏱️ **Durée:** ${hours}h\n`;
-    description += `💰 **Montant:** ${totalPrice}€\n`;
-    
-    if (paymentMethod === 'paypal') {
-      description += `💳 **Moyen de paiement:** PayPal\n`;
-      description += `📧 **Email:** ${paypalEmail}\n`;
-    } else {
-      description += `🧠 **Moyen de paiement:** Brainrot\n`;
-    }
-    description += `\nDécris ton problème et on va t'aider.`;
-
     const embed = new EmbedBuilder()
       .setColor('#00ff00')
       .setTitle(`🎫 Ticket #${ticketCounter}`)
-      .setDescription(description)
+      .setDescription(`Bienvenue ${user}!\n\n⏱️ **Durée:** ${hours}h\n\nChoisir ton moyen de paiement :`)
       .setFooter({ text: 'Clique sur le bouton pour fermer le ticket' });
 
-    await ticket.send({ embeds: [embed], components: [closeButton] });
+    await ticket.send({ embeds: [embed], components: [paymentMenu, closeButton] });
+
+    // Stocker les données du ticket
+    userTicketData.set(user.id, { hours, priceEuro, priceGarama, ticketChannel: ticket });
   } catch (error) {
     console.error(error);
   }
